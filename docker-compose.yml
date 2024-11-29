@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  database:
+    build:
+      context: ./src/database
+    networks:
+      - crypto_network
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: crypto_db
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  database_api:
+    build:
+      context: ./src/database_api
+    networks:
+      - crypto_network
+    depends_on:
+      - database
+    ports:
+      - "5000:5000"
+
+  data_ingestion:
+    build:
+      context: ./src/data_ingestion
+    networks:
+      - crypto_network
+    depends_on:
+      - database_api
+
+networks:
+  crypto_network:
+    driver: bridge
+
+volumes:
+  db_data:

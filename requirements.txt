@@ -1,0 +1,7 @@
+Flask
+mysql-connector-python
+requests
+pandas
+python-binance
+schedule
+gunicorn
