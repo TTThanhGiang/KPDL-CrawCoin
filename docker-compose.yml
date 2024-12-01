@@ -32,6 +32,16 @@ services:
     depends_on:
       - database_api
 
+  data_processor:
+    build:
+      context: ./src/data_processing
+    networks:
+      - crypto_network
+    ports:
+      - "5001:5001"
+    depends_on:
+      - database_api
+
 networks:
   crypto_network:
     driver: bridge
