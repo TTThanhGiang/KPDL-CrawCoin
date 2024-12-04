@@ -6,9 +6,13 @@ from datetime import datetime
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 import pandas as pd
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 # Kết nối database
 db_connection = mysql.connector.connect(
@@ -138,6 +142,69 @@ def get_next_day_prediction(symbol):
 
     predicted_price = predict_next_day_price(df_symbol, symbol)
     return jsonify({"symbol": symbol, "predicted_price": predicted_price})
+
+def analyze_volatility(df, symbol, year=2024):
+    # Chuyển cột 'time' thành datetime
+    df['time'] = pd.to_datetime(df['time'], errors='coerce')
+
+    # Lọc dữ liệu chỉ lấy năm chỉ định
+    df_filtered = df[df['time'].dt.year == year]
+
+    # Chuyển đổi giá trị cột priceChangePercent thành float và bỏ giá trị NaN
+    df_filtered['priceChangePercent'] = pd.to_numeric(df_filtered['priceChangePercent'], errors='coerce')
+    df_filtered = df_filtered.dropna(subset=['priceChangePercent'])
+
+    # Lọc dữ liệu theo đồng coin
+    df_symbol = df_filtered[df_filtered['symbol'] == symbol]
+
+    # Loại bỏ các cột không cần thiết
+    df_symbol = df_symbol.drop(columns=['symbol', 'buyVolume', 'sellVolume', 'id'], errors='ignore')
+
+    # Kiểm tra nếu dữ liệu đủ để thực hiện clustering
+    if df_symbol.shape[0] < 4:
+        return {"error": f"Not enough data for {symbol} to perform clustering."}
+
+    # Thêm cột 'time_period' để nhóm theo ngày
+    df_symbol['time_period'] = df_symbol['time'].dt.to_period('D')
+
+    # Lấy các cột cần thiết cho K-Means clustering
+    X = df_symbol[['priceChange', 'priceChangePercent', 'volume']].values
+
+    # Áp dụng thuật toán K-Means clustering
+    kmeans = KMeans(n_clusters=4, random_state=42)
+    df_symbol['cluster'] = kmeans.fit_predict(X)
+
+    # Gắn nhãn độ biến động dựa trên giá trị trung bình của priceChangePercent
+    cluster_means = df_symbol.groupby(['cluster', 'time_period'])['priceChangePercent'].mean(numeric_only=True)
+    volatility_labels = {i: 'High Volatility' if mean > 0 else 'Low Volatility' for i, mean in cluster_means.items()}
+    df_symbol['volatility_label'] = df_symbol.apply(
+        lambda row: volatility_labels.get((row['cluster'], row['time_period']), 'Unknown'),
+        axis=1
+    )
+
+    # Chuyển đổi 'time_period' thành chuỗi
+    df_symbol['time_period'] = df_symbol['time_period'].astype(str)
+
+    # Tóm tắt dữ liệu các cụm theo khoảng thời gian
+    cluster_summary = (
+        df_symbol.groupby(['cluster', 'time_period'])
+        .mean(numeric_only=True)
+        .reset_index()
+    )
+    cluster_summary['time_period'] = cluster_summary['time_period'].astype(str)
+    cluster_summary = cluster_summary.to_dict(orient='records')
+
+    return {"symbol": symbol, "cluster_summary": cluster_summary}
+
+@app.route('/analyze_volatility/<symbol>/<int:year>', methods=['GET'])
+def get_analyze_volatility(symbol, year):
+    # Fetch raw data (giả định fetch_raw_data() đã được định nghĩa)
+    df = fetch_raw_data()
+
+    # Gọi hàm phân tích
+    result = analyze_volatility(df, symbol, year)
+
+    return jsonify(result)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001)

@@ -83,7 +83,7 @@ def get_data():
                 'quoteVolume': row[10],
                 'buyVolume': row[11],
                 'sellVolume': row[12],
-                'time': time_vietnam.isoformat()  # Chuyển đổi về định dạng ISO string
+                'time': time_vietnam.isoformat() if time_vietnam else None  # Chuyển đổi nếu có giá trị
             })
         return jsonify(data), 200
     except Exception as e:

@@ -40,7 +40,16 @@ services:
     ports:
       - "5001:5001"
     depends_on:
-      - database_api
+      - database
+  web:
+    build:
+      context: ./src/web # Đường dẫn tới thư mục React
+    networks:
+      - crypto_network
+    depends_on:
+      - data_processor
+    ports:
+      - "3000:80" # React sẽ chạy trên cổng 3000
 
 networks:
   crypto_network:
